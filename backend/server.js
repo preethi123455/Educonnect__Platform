@@ -14,7 +14,8 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(cors({ origin: 'http://localhost:3000', credentials: true })); // Allow React frontend
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/faceAuthDB';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://preethi:Preethi1234@cluster0.umdwxhv.mongodb.net/test';
+
 
 // 🔹 MongoDB Connection
 mongoose.connect(MONGO_URI, {
