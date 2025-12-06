@@ -25,7 +25,8 @@ const Signup = () => {
     setCapturedImage(imageSrc);
 
     try {
-      const res = await axios.post("http://localhost:6001/signup", {
+      // ✅ Updated backend URL to Render deployment
+      const res = await axios.post("https://educonnect-platform-backend.onrender.com/signup", {
         name,
         age,
         email,
@@ -51,9 +52,24 @@ const Signup = () => {
       <Webcam ref={webcamRef} screenshotFormat="image/jpeg" />
       {capturedImage && <img src={capturedImage} alt="Captured face" width={100} />}
 
-      <input type="text" placeholder="Enter Name" onChange={(e) => setName(e.target.value)} required />
-      <input type="number" placeholder="Enter Age" onChange={(e) => setAge(e.target.value)} required />
-      <input type="email" placeholder="Enter Email" onChange={(e) => setEmail(e.target.value)} required />
+      <input
+        type="text"
+        placeholder="Enter Name"
+        onChange={(e) => setName(e.target.value)}
+        required
+      />
+      <input
+        type="number"
+        placeholder="Enter Age"
+        onChange={(e) => setAge(e.target.value)}
+        required
+      />
+      <input
+        type="email"
+        placeholder="Enter Email"
+        onChange={(e) => setEmail(e.target.value)}
+        required
+      />
 
       <button onClick={captureAndSignup}>Signup</button>
 

@@ -11,13 +11,22 @@ faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
 require('dotenv').config();
 
 const app = express();
+
+// Body parser
 app.use(express.json({ limit: '10mb' }));
-app.use(cors({ origin: 'http://localhost:3000', credentials: true })); // Allow React frontend
 
+// 🔹 CORS - allow local dev and deployed frontend
+const allowedOrigins = [
+  'http://localhost:3000', // Local dev frontend
+  'https://educonnect-platform-frontend.onrender.com', // Deployed frontend
+];
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+}));
+
+// 🔹 MongoDB connection
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://preethi:Preethi1234@cluster0.umdwxhv.mongodb.net/test';
-
-
-// 🔹 MongoDB Connection
 mongoose.connect(MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
@@ -28,32 +37,32 @@ mongoose.connect(MONGO_URI, {
   process.exit(1);
 });
 
-// 🔹 User Schema
+// 🔹 User schema
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   age: { type: Number, required: true },
   email: { type: String, required: true, unique: true },
-  role: { type: String, required: true }, // Added role field
+  role: { type: String, default: 'user' }, // Default role if not provided
   faceDescriptors: { type: [[Number]], required: true },
 });
 
 const User = mongoose.model('User', userSchema);
 
-// 🔹 Load FaceAPI Models
+// 🔹 Load FaceAPI models
 async function loadModels() {
   try {
-    const modelPath = path.join(__dirname, 'models'); // Ensure 'models' folder exists
+    const modelPath = path.join(__dirname, 'models');
     await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelPath);
     await faceapi.nets.faceRecognitionNet.loadFromDisk(modelPath);
     await faceapi.nets.faceLandmark68Net.loadFromDisk(modelPath);
-    console.log("✅ Face API models loaded");
+    console.log('✅ Face API models loaded');
   } catch (err) {
-    console.error("❌ Error loading FaceAPI models:", err.message);
+    console.error('❌ Error loading FaceAPI models:', err.message);
   }
 }
 loadModels();
 
-// 🔹 Function to Get Face Descriptor
+// 🔹 Get face descriptor from base64 image
 async function getFaceDescriptor(imageBase64) {
   try {
     const img = await canvas.loadImage(imageBase64);
@@ -61,23 +70,21 @@ async function getFaceDescriptor(imageBase64) {
       .withFaceLandmarks()
       .withFaceDescriptor();
 
-    if (!detection) {
-      throw new Error('No face detected');
-    }
+    if (!detection) throw new Error('No face detected');
 
     return Array.from(detection.descriptor);
   } catch (error) {
-    console.error("❌ Face Detection Error:", error.message);
-    throw new Error("Face detection failed. Try again.");
+    console.error('❌ Face Detection Error:', error.message);
+    throw new Error('Face detection failed. Try again.');
   }
 }
 
-// 🔹 Signup Route
+// 🔹 Signup route
 app.post('/signup', async (req, res) => {
   try {
     const { name, age, email, role, image } = req.body;
 
-    if (!name || !age || !email || !role || !image) {
+    if (!name || !age || !email || !image) {
       return res.status(400).json({ message: '❌ All fields are required' });
     }
 
@@ -91,18 +98,17 @@ app.post('/signup', async (req, res) => {
       return res.status(400).json({ message: '❌ No face detected' });
     }
 
-    const newUser = new User({ name, age, email, role, faceDescriptors: [faceDescriptor] });
+    const newUser = new User({ name, age, email, role: role || 'user', faceDescriptors: [faceDescriptor] });
     await newUser.save();
 
     res.status(201).json({ message: '✅ Signup successful' });
-
   } catch (error) {
     console.error('❌ Signup Error:', error.message);
     res.status(500).json({ message: '❌ Signup failed. Try again.' });
   }
 });
 
-// 🔹 Login Route
+// 🔹 Login route
 app.post('/login', async (req, res) => {
   try {
     const { email, image } = req.body;
@@ -129,14 +135,13 @@ app.post('/login', async (req, res) => {
     const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.4);
     const bestMatch = faceMatcher.findBestMatch(new Float32Array(loginFaceDescriptor));
 
-    console.log("🔍 Best Match:", bestMatch.toString());
+    console.log('🔍 Best Match:', bestMatch.toString());
 
     if (bestMatch.label === user.email) {
       res.status(200).json({ success: true, message: '✅ Login successful', role: user.role });
     } else {
       res.status(400).json({ success: false, message: '❌ Face does not match' });
     }
-
   } catch (error) {
     console.error('❌ Login Error:', error.message);
     res.status(500).json({ message: '❌ Login failed. Try again.' });

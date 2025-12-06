@@ -3,7 +3,8 @@ import Webcam from "react-webcam";
 import axios from "axios";
 
 const Login = () => {
-  const webcamRef = useRef(null);
+  const webcamRef = useRef(null);  
+
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [capturedImage, setCapturedImage] = useState(null);
@@ -23,7 +24,8 @@ const Login = () => {
     setCapturedImage(imageSrc);
 
     try {
-      const res = await axios.post("http://localhost:6001/login", {
+      // ✅ Changed backend URL to Render deployment
+      const res = await axios.post("https://educonnect-platform-backend.onrender.com/login", {
         email,
         image: imageSrc,
       });
