@@ -12,37 +12,52 @@ require('dotenv').config();
 
 const app = express();
 
-// Body parser
+// 🔹 Body parser
 app.use(express.json({ limit: '10mb' }));
 
 // 🔹 CORS - allow local dev and deployed frontend
 const allowedOrigins = [
-  'http://localhost:3000', // Local dev frontend
+  'http://localhost:3000', // Local frontend
   'https://educonnect-platform-frontend.onrender.com', // Deployed frontend
 ];
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like Postman)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg =
+          '❌ The CORS policy for this site does not allow access from the specified Origin.';
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
+    credentials: true,
+  })
+);
 
 // 🔹 MongoDB connection
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://preethi:Preethi1234@cluster0.umdwxhv.mongodb.net/test';
-mongoose.connect(MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log('✅ Connected to MongoDB'))
-.catch((error) => {
-  console.error('❌ MongoDB connection error:', error.message);
-  process.exit(1);
-});
+const MONGO_URI =
+  process.env.MONGO_URI ||
+  'mongodb+srv://preethi:Preethi1234@cluster0.umdwxhv.mongodb.net/test';
+mongoose
+  .connect(MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => console.log('✅ Connected to MongoDB'))
+  .catch((error) => {
+    console.error('❌ MongoDB connection error:', error.message);
+    process.exit(1);
+  });
 
 // 🔹 User schema
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   age: { type: Number, required: true },
   email: { type: String, required: true, unique: true },
-  role: { type: String, default: 'user' }, // Default role if not provided
+  role: { type: String, default: 'user' },
   faceDescriptors: { type: [[Number]], required: true },
 });
 
@@ -51,7 +66,7 @@ const User = mongoose.model('User', userSchema);
 // 🔹 Load FaceAPI models
 async function loadModels() {
   try {
-    const modelPath = path.join(__dirname, 'models');
+    const modelPath = path.join(__dirname, 'models'); // Ensure models folder exists
     await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelPath);
     await faceapi.nets.faceRecognitionNet.loadFromDisk(modelPath);
     await faceapi.nets.faceLandmark68Net.loadFromDisk(modelPath);
@@ -66,7 +81,8 @@ loadModels();
 async function getFaceDescriptor(imageBase64) {
   try {
     const img = await canvas.loadImage(imageBase64);
-    const detection = await faceapi.detectSingleFace(img)
+    const detection = await faceapi
+      .detectSingleFace(img)
       .withFaceLandmarks()
       .withFaceDescriptor();
 
@@ -94,11 +110,14 @@ app.post('/signup', async (req, res) => {
     }
 
     const faceDescriptor = await getFaceDescriptor(image);
-    if (!faceDescriptor) {
-      return res.status(400).json({ message: '❌ No face detected' });
-    }
 
-    const newUser = new User({ name, age, email, role: role || 'user', faceDescriptors: [faceDescriptor] });
+    const newUser = new User({
+      name,
+      age,
+      email,
+      role: role || 'user',
+      faceDescriptors: [faceDescriptor],
+    });
     await newUser.save();
 
     res.status(201).json({ message: '✅ Signup successful' });
@@ -123,13 +142,10 @@ app.post('/login', async (req, res) => {
     }
 
     const loginFaceDescriptor = await getFaceDescriptor(image);
-    if (!loginFaceDescriptor) {
-      return res.status(400).json({ message: '❌ No face detected' });
-    }
 
     const labeledDescriptors = new faceapi.LabeledFaceDescriptors(
       user.email,
-      user.faceDescriptors.map(desc => new Float32Array(desc))
+      user.faceDescriptors.map((desc) => new Float32Array(desc))
     );
 
     const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.4);
