@@ -3,7 +3,9 @@ import React, { useState } from 'react';
 import styles from "./styles";
 
 const AIAssistant = () => {
-  const groqApiKey = "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";  // ⚠️ Replace this with your actual key but DO NOT expose it in production!
+ const groqApiKey = "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"; 
+
+  // ⚠️ Replace this with your actual key but DO NOT expose it in production!
 
   const [messages, setMessages] = useState([
     { role: 'assistant', content: "Hello! I'm your AI learning assistant. How can I help you today?" }
@@ -32,7 +34,7 @@ const AIAssistant = () => {
           'Authorization': `Bearer ${groqApiKey}`
         },
         body: JSON.stringify({
-          model: mode === 'general' ? 'llama3-8b-8192' : 'mixtral-8x7b-32768',
+           model: mode === 'general' ? 'llama-3.1-8b-instant' : 'llama-3.3-70b-versatile',
           messages: [
             {
               role: 'system',
