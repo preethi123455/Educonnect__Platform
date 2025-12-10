@@ -51,7 +51,20 @@ const Login = () => {
       <input type="email" placeholder="Enter Email" onChange={(e) => setEmail(e.target.value)} required />
 
       <button onClick={captureAndLogin}>Login</button>
-
+       <button
+        onClick={() => { window.location.href = "./signup"; }}
+        style={{
+          marginLeft: "10px",
+          background: "#6a0dad",
+          color: "white",
+          padding: "8px 15px",
+          borderRadius: "6px",
+          border: "none",
+          cursor: "pointer"
+        }}
+      >
+        Already Logged In? Login
+      </button>
       <p>{message}</p>
     </div>
   );

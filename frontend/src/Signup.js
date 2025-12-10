@@ -72,7 +72,20 @@ const Signup = () => {
       />
 
       <button onClick={captureAndSignup}>Signup</button>
-
+      <button
+        onClick={() => { window.location.href = "./login"; }}
+        style={{
+          marginLeft: "10px",
+          background: "#6a0dad",
+          color: "white",
+          padding: "8px 15px",
+          borderRadius: "6px",
+          border: "none",
+          cursor: "pointer"
+        }}
+      >
+        Already Signed Up? Login
+      </button>
       <p>{message}</p>
     </div>
   );
