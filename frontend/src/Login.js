@@ -2,8 +2,8 @@ import React, { useRef, useState } from "react";
 import Webcam from "react-webcam";
 import axios from "axios";
 
-const Login = () => {
-  const webcamRef = useRef(null);  
+const Login = (props) => {
+  const webcamRef = useRef(null);
 
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
@@ -24,15 +24,21 @@ const Login = () => {
     setCapturedImage(imageSrc);
 
     try {
-      // ✅ Changed backend URL to Render deployment
-      const res = await axios.post("https://educonnect-platform-backend.onrender.com/login", {
-        email,
-        image: imageSrc,
-      });
+      const res = await axios.post(
+        "https://educonnect-platform-backend.onrender.com/login",
+        {
+          email,
+          image: imageSrc,
+        }
+      );
 
       if (res.data.success) {
         setMessage("✅ Login successful!");
-        window.location.href = "/home";
+
+        // ⭐ FIX: Call App.js to switch to dashboard
+        setTimeout(() => {
+          if (props.onLoginSuccess) props.onLoginSuccess();
+        }, 1500);
       } else {
         setMessage("❌ Login failed. Face does not match.");
       }
@@ -45,14 +51,26 @@ const Login = () => {
   return (
     <div>
       <h2>Login</h2>
+
       <Webcam ref={webcamRef} screenshotFormat="image/jpeg" />
-      {capturedImage && <img src={capturedImage} alt="Captured face" width={100} />}
-      
-      <input type="email" placeholder="Enter Email" onChange={(e) => setEmail(e.target.value)} required />
+      {capturedImage && (
+        <img src={capturedImage} alt="Captured face" width={100} />
+      )}
+
+      <input
+        type="email"
+        placeholder="Enter Email"
+        onChange={(e) => setEmail(e.target.value)}
+        required
+      />
 
       <button onClick={captureAndLogin}>Login</button>
-       <button
-        onClick={() => { window.location.href = "./signup"; }}
+
+      {/* ⭐ FIXED: Correct button to go to Signup */}
+      <button
+        onClick={() => {
+          if (props.onGoToSignup) props.onGoToSignup();
+        }}
         style={{
           marginLeft: "10px",
           background: "#6a0dad",
@@ -60,11 +78,12 @@ const Login = () => {
           padding: "8px 15px",
           borderRadius: "6px",
           border: "none",
-          cursor: "pointer"
+          cursor: "pointer",
         }}
       >
-        Already Logged In? Login
+        New User? Signup
       </button>
+
       <p>{message}</p>
     </div>
   );

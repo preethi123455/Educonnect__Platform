@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import Webcam from "react-webcam";
 import axios from "axios";
 
-const Signup = () => {
+const Signup = (props) => {
   const webcamRef = useRef(null);
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
@@ -25,20 +25,23 @@ const Signup = () => {
     setCapturedImage(imageSrc);
 
     try {
-      // ✅ Updated backend URL to Render deployment
-      const res = await axios.post("https://educonnect-platform-backend.onrender.com/signup", {
-        name,
-        age,
-        email,
-        image: imageSrc,
-      });
+      const res = await axios.post(
+        "https://educonnect-platform-backend.onrender.com/signup",
+        {
+          name,
+          age,
+          email,
+          image: imageSrc,
+        }
+      );
 
       setMessage(res.data.message);
 
+      // ⭐ FIXED: Redirect using App.js flow, NOT URL
       if (res.data.message.includes("Signup successful")) {
         setTimeout(() => {
-          window.location.href = "./login";
-        }, 2000);
+          if (props.onSignupSuccess) props.onSignupSuccess();
+        }, 1500);
       }
     } catch (error) {
       console.error("Signup Error:", error);
@@ -49,8 +52,12 @@ const Signup = () => {
   return (
     <div>
       <h2>Signup</h2>
+
       <Webcam ref={webcamRef} screenshotFormat="image/jpeg" />
-      {capturedImage && <img src={capturedImage} alt="Captured face" width={100} />}
+
+      {capturedImage && (
+        <img src={capturedImage} alt="Captured face" width={100} />
+      )}
 
       <input
         type="text"
@@ -72,8 +79,12 @@ const Signup = () => {
       />
 
       <button onClick={captureAndSignup}>Signup</button>
+
+      {/* ⭐ FIXED: Correct navigation to Login */}
       <button
-        onClick={() => { window.location.href = "./login"; }}
+        onClick={() => {
+          if (props.onSignupSuccess) props.onSignupSuccess();
+        }}
         style={{
           marginLeft: "10px",
           background: "#6a0dad",
@@ -81,11 +92,12 @@ const Signup = () => {
           padding: "8px 15px",
           borderRadius: "6px",
           border: "none",
-          cursor: "pointer"
+          cursor: "pointer",
         }}
       >
         Already Signed Up? Login
       </button>
+
       <p>{message}</p>
     </div>
   );
