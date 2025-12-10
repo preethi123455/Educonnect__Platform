@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useState } from "react";
 import { AppContext } from "./components/AppContext"; 
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
@@ -17,7 +17,7 @@ import StudySchedulePlanner from "./components/StudySchedulePlanner";
 import Challenges from "./components/Challenges";
 import Doubt from "./components/DoubtSolver";
 import Counselling from "./components/Counselling";
-import Mock  from "./components/Mock";
+import Mock from "./components/Mock";
 import JobVacancyFinder from "./components/Jobvacancy";
 import PortfolioGenerator from "./components/Portfoliogen";
 import Games from "./components/Games";
@@ -28,7 +28,15 @@ import Road from "./components/Roadmap";
 import Groups from "./components/Groups";
 import Compiler from "./components/Compiler";
 import Studie from "./components/Studyscheduler";
+
 const App = () => {
+
+  // ------------------------------
+  // NEW: Signup/Login flow handler
+  // ------------------------------
+  const [authStep, setAuthStep] = useState("signup");  
+  // signup → login → dashboard
+
   const { activeTab } = useContext(AppContext);
 
   const renderActiveComponent = () => {
@@ -50,40 +58,51 @@ const App = () => {
       case "study":
         return <StudySchedulePlanner />;
       case "convo":
-          return <Convo />;
+        return <Convo />;
       case "study-schedule":
-          return <StudySchedulePlanner/>;
+        return <StudySchedulePlanner />;
       case "challenges":
-          return <Challenges/>;
+        return <Challenges />;
       case "doubt":
-          return <Doubt />;
+        return <Doubt />;
       case "counselling":
-          return <Counselling/>;
+        return <Counselling />;
       case "mock":
-        return <Mock/>;
+        return <Mock />;
       case "vac":
-        return <JobVacancyFinder/>;
+        return <JobVacancyFinder />;
       case "generator":
-        return <PortfolioGenerator/>;
+        return <PortfolioGenerator />;
       case "games":
-        return <Games/>;
+        return <Games />;
       case "latest":
-        return <Latest/>;
-      case "login":
-        return <Login/>;
-      case "signup":
-        return <Signup/>;
+        return <Latest />;
       case "road":
-          return <Road/>;
+        return <Road />;
       case "groups":
-          return <Groups/>;
+        return <Groups />;
       case "compiler":
-          return <Compiler/>;
+        return <Compiler />;
       case "studie":
-          return <Studie/>;
+        return <Studie />;
+      default:
+        return <Dashboard />;
     }
   };
 
+  // ------------------------------------------
+  // AUTH FLOW: SIGNUP → LOGIN → DASHBOARD
+  // ------------------------------------------
+
+  if (authStep === "signup") {
+    return <Signup onSignupSuccess={() => setAuthStep("login")} />;
+  }
+
+  if (authStep === "login") {
+    return <Login onLoginSuccess={() => setAuthStep("dashboard")} />;
+  }
+
+  // After login → show full dashboard UI
   return (
     <div style={styles.appContainer}>
       <Header />
