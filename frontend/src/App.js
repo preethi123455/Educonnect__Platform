@@ -31,14 +31,13 @@ import Studie from "./components/Studyscheduler";
 
 const App = () => {
 
-  // ------------------------------
-  // NEW: Signup/Login flow handler
-  // ------------------------------
+  // AUTH FLOW STATE
   const [authStep, setAuthStep] = useState("signup");  
-  // signup → login → dashboard
+  // Steps → signup → login → dashboard
 
   const { activeTab } = useContext(AppContext);
 
+  // Render component inside Dashboard area
   const renderActiveComponent = () => {
     switch (activeTab) {
       case "dashboard":
@@ -90,19 +89,31 @@ const App = () => {
     }
   };
 
-  // ------------------------------------------
-  // AUTH FLOW: SIGNUP → LOGIN → DASHBOARD
-  // ------------------------------------------
+  // ---------------------------
+  // AUTH CONTROLLED PAGES FIRST
+  // ---------------------------
 
   if (authStep === "signup") {
-    return <Signup onSignupSuccess={() => setAuthStep("login")} />;
+    return (
+      <Signup 
+        onSignupSuccess={() => setAuthStep("login")}
+      />
+    );
   }
 
   if (authStep === "login") {
-    return <Login onLoginSuccess={() => setAuthStep("dashboard")} />;
+    return (
+      <Login 
+        onLoginSuccess={() => setAuthStep("dashboard")}
+        onGoToSignup={() => setAuthStep("signup")}
+      />
+    );
   }
 
-  // After login → show full dashboard UI
+  // ---------------------------
+  // AFTER LOGIN → MAIN APP UI
+  // ---------------------------
+
   return (
     <div style={styles.appContainer}>
       <Header />
