@@ -4,32 +4,28 @@ const cors = require('cors');
 const faceapi = require('face-api.js');
 const canvas = require('canvas');
 const path = require('path');
+require('dotenv').config();
 
 const { Canvas, Image, ImageData } = canvas;
 faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
 
-require('dotenv').config();
-
 const app = express();
 
-// 🔹 Body parser
+// Body parser
 app.use(express.json({ limit: '10mb' }));
 
-// 🔹 CORS - allow local dev and deployed frontend
+// CORS
 const allowedOrigins = [
-  'http://localhost:3000', // Local frontend
-  'https://educonnect-platform-frontend.onrender.com', // Deployed frontend
+  'http://localhost:3000',
+  'https://educonnect-platform-frontend.onrender.com',
 ];
+
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like Postman)
       if (!origin) return callback(null, true);
-
-      if (allowedOrigins.indexOf(origin) === -1) {
-        const msg =
-          '❌ The CORS policy for this site does not allow access from the specified Origin.';
-        return callback(new Error(msg), false);
+      if (!allowedOrigins.includes(origin)) {
+        return callback(new Error('❌ CORS blocked'), false);
       }
       return callback(null, true);
     },
@@ -37,135 +33,119 @@ app.use(
   })
 );
 
-// 🔹 MongoDB connection
-const MONGO_URI =
-  process.env.MONGO_URI ||
-  'mongodb+srv://preethi:Preethi1234@cluster0.umdwxhv.mongodb.net/test';
+// MongoDB Connection
+const MONGO_URI = process.env.MONGO_URI;
+
 mongoose
-  .connect(MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+  .connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch((error) => {
-    console.error('❌ MongoDB connection error:', error.message);
+    console.error('❌ MongoDB error:', error.message);
     process.exit(1);
   });
 
-// 🔹 User schema
+// User Schema
 const userSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  age: { type: Number, required: true },
-  email: { type: String, required: true, unique: true },
+  name: String,
+  age: Number,
+  email: { type: String, unique: true },
   role: { type: String, default: 'user' },
-  faceDescriptors: { type: [[Number]], required: true },
+  faceDescriptors: [[Number]],
 });
 
 const User = mongoose.model('User', userSchema);
 
-// 🔹 Load FaceAPI models
+// Load Models
 async function loadModels() {
+  const modelPath = path.join(__dirname, 'models');
   try {
-    const modelPath = path.join(__dirname, 'models'); // Ensure models folder exists
     await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelPath);
     await faceapi.nets.faceRecognitionNet.loadFromDisk(modelPath);
     await faceapi.nets.faceLandmark68Net.loadFromDisk(modelPath);
     console.log('✅ Face API models loaded');
   } catch (err) {
-    console.error('❌ Error loading FaceAPI models:', err.message);
+    console.error('❌ Model loading error:', err.message);
   }
 }
 loadModels();
 
-// 🔹 Get face descriptor from base64 image
+// Extract Face Descriptor
 async function getFaceDescriptor(imageBase64) {
-  try {
-    const img = await canvas.loadImage(imageBase64);
-    const detection = await faceapi
-      .detectSingleFace(img)
-      .withFaceLandmarks()
-      .withFaceDescriptor();
+  const img = await canvas.loadImage(imageBase64);
+  const detection = await faceapi
+    .detectSingleFace(img)
+    .withFaceLandmarks()
+    .withFaceDescriptor();
 
-    if (!detection) throw new Error('No face detected');
+  if (!detection) throw new Error('No face detected');
 
-    return Array.from(detection.descriptor);
-  } catch (error) {
-    console.error('❌ Face Detection Error:', error.message);
-    throw new Error('Face detection failed. Try again.');
-  }
+  return Array.from(detection.descriptor);
 }
 
-// 🔹 Signup route
+// Signup
 app.post('/signup', async (req, res) => {
   try {
     const { name, age, email, role, image } = req.body;
 
-    if (!name || !age || !email || !image) {
-      return res.status(400).json({ message: '❌ All fields are required' });
-    }
+    if (!name || !age || !email || !image)
+      return res.status(400).json({ message: '❌ All fields required' });
 
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: '❌ User already exists' });
-    }
+    const exists = await User.findOne({ email });
+    if (exists) return res.status(400).json({ message: '❌ User exists' });
 
-    const faceDescriptor = await getFaceDescriptor(image);
+    const descriptor = await getFaceDescriptor(image);
 
-    const newUser = new User({
+    const user = new User({
       name,
       age,
       email,
       role: role || 'user',
-      faceDescriptors: [faceDescriptor],
+      faceDescriptors: [descriptor],
     });
-    await newUser.save();
 
-    res.status(201).json({ message: '✅ Signup successful' });
+    await user.save();
+
+    res.json({ message: '✅ Signup successful' });
   } catch (error) {
-    console.error('❌ Signup Error:', error.message);
-    res.status(500).json({ message: '❌ Signup failed. Try again.' });
+    res.status(500).json({ message: '❌ Signup failed' });
   }
 });
 
-// 🔹 Login route
+// Login
 app.post('/login', async (req, res) => {
   try {
     const { email, image } = req.body;
 
-    if (!email || !image) {
-      return res.status(400).json({ message: '❌ Email and image are required' });
-    }
+    if (!email || !image)
+      return res.status(400).json({ message: '❌ Email + image required' });
 
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ message: '❌ User not found' });
-    }
+    if (!user) return res.status(400).json({ message: '❌ User not found' });
 
-    const loginFaceDescriptor = await getFaceDescriptor(image);
+    const loginDescriptor = await getFaceDescriptor(image);
 
-    const labeledDescriptors = new faceapi.LabeledFaceDescriptors(
+    const labeled = new faceapi.LabeledFaceDescriptors(
       user.email,
-      user.faceDescriptors.map((desc) => new Float32Array(desc))
+      user.faceDescriptors.map((d) => new Float32Array(d))
     );
 
-    const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.4);
-    const bestMatch = faceMatcher.findBestMatch(new Float32Array(loginFaceDescriptor));
-
-    console.log('🔍 Best Match:', bestMatch.toString());
+    const matcher = new faceapi.FaceMatcher(labeled, 0.4);
+    const bestMatch = matcher.findBestMatch(new Float32Array(loginDescriptor));
 
     if (bestMatch.label === user.email) {
-      res.status(200).json({ success: true, message: '✅ Login successful', role: user.role });
+      return res.json({
+        success: true,
+        message: '✅ Login successful',
+        role: user.role,
+      });
     } else {
-      res.status(400).json({ success: false, message: '❌ Face does not match' });
+      return res.json({ success: false, message: '❌ Face does not match' });
     }
   } catch (error) {
-    console.error('❌ Login Error:', error.message);
-    res.status(500).json({ message: '❌ Login failed. Try again.' });
+    res.status(500).json({ message: '❌ Login failed' });
   }
 });
 
-// 🔹 Start server
+// Start Server
 const PORT = process.env.PORT || 6001;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

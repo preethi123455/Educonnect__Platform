@@ -1,24 +1,21 @@
 import React, { useState } from 'react';
- // Import useNavigate
 import styles from "./styles";
 
 const AIAssistant = () => {
- const groqApiKey = "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"; 
 
-  // ⚠️ Replace this with your actual key but DO NOT expose it in production!
+  const groqApiKey = process.env.REACT_APP_GROQ_API_KEY; // ⭐ NEW
 
   const [messages, setMessages] = useState([
     { role: 'assistant', content: "Hello! I'm your AI learning assistant. How can I help you today?" }
   ]);
+
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState('general'); // 'general' or 'coding'
-  
-  
+  const [mode, setMode] = useState('general');
+
   const handleSend = async () => {
     if (!input.trim()) return;
 
-    // Add user message to chat
     const userMessage = { role: 'user', content: input };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
@@ -31,40 +28,40 @@ const AIAssistant = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${groqApiKey}`
+          'Authorization': `Bearer ${groqApiKey}`,
         },
         body: JSON.stringify({
-           model: mode === 'general' ? 'llama-3.1-8b-instant' : 'llama-3.3-70b-versatile',
+          model: mode === 'general' ? 'llama-3.1-8b-instant' : 'llama-3.3-70b-versatile',
           messages: [
             {
               role: 'system',
-              content: mode === 'general' 
-                ? 'You are an AI learning assistant helping students understand academic subjects. Provide clear, helpful responses with examples when appropriate.'
-                : 'You are a coding expert helping programmers solve technical problems. Provide code examples and explain solutions clearly.'
+              content:
+                mode === 'general'
+                  ? 'You are an AI learning assistant helping students.'
+                  : 'You are a coding expert helping programmers.',
             },
             ...currentMessages
           ],
           temperature: 0.7,
-          max_tokens: 1024
-        })
+          max_tokens: 1024,
+        }),
       });
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
 
       const data = await response.json();
 
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: data.choices[0]?.message?.content || "Sorry, I couldn't generate a response."
-      }]);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: data.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response.",
+        },
+      ]);
+
     } catch (error) {
-      console.error('Error calling Groq API:', error);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: 'Sorry, I encountered an error connecting to the AI service. Please try again or check your internet connection.'
-      }]);
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: 'Error connecting to AI. Try again.' },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -73,69 +70,46 @@ const AIAssistant = () => {
   return (
     <div style={{ height: 'calc(100vh - 140px)' }}>
       <div style={styles.cardHeader}>
-        
         <h2 style={styles.cardTitle}>AI Learning Assistant</h2>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button 
-            onClick={() => setMode('general')}
-            style={{
-              ...styles.button,
-              background: mode === 'general' ? '#6a0dad' : '#f0e6ff',
-              color: mode === 'general' ? 'white' : '#6a0dad'
-            }}
-          >
-            General Help
-          </button>
-        </div>
+
+        <button
+          onClick={() => setMode('general')}
+          style={{
+            ...styles.button,
+            background: mode === 'general' ? '#6a0dad' : '#f0e6ff',
+            color: mode === 'general' ? 'white' : '#6a0dad',
+          }}
+        >
+          General Help
+        </button>
       </div>
 
-      <div style={{
-        ...styles.card,
-        height: 'calc(100% - 70px)',
-        marginTop: '15px',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
+      <div style={{ ...styles.card, height: 'calc(100% - 70px)', marginTop: '15px', display: 'flex', flexDirection: 'column' }}>
         <div style={styles.chatMessages}>
-          {messages.map((msg, idx) => (
-            <div 
-              key={idx} 
-              style={msg.role === 'user' ? styles.messageUser : styles.messageBot}
-            >
+          {messages.map((msg, i) => (
+            <div key={i} style={msg.role === 'user' ? styles.messageUser : styles.messageBot}>
               {msg.content}
             </div>
           ))}
-          {loading && (
-            <div style={styles.messageBot}>
-              Thinking...
-            </div>
-          )}
+          {loading && <div style={styles.messageBot}>Thinking...</div>}
         </div>
 
-        <div style={{
-          display: 'flex',
-          gap: '10px',
-          padding: '15px',
-          borderTop: '1px solid #f0f0f0'
-        }}>
+        <div style={{ display: 'flex', gap: '10px', padding: '15px', borderTop: '1px solid #f0f0f0' }}>
           <input
             value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSend()}
-            placeholder={`Ask the ${mode === 'general' ? 'learning assistant' : 'coding expert'} a question...`}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder={`Ask the assistant...`}
             style={{
               flex: 1,
               padding: '12px 15px',
               borderRadius: '8px',
               border: '1px solid #e0e0e0',
-              fontSize: '14px'
+              fontSize: '14px',
             }}
           />
-          <button 
-            onClick={handleSend}
-            style={styles.button}
-            disabled={loading}
-          >
+
+          <button onClick={handleSend} style={styles.button} disabled={loading}>
             Send
           </button>
         </div>
