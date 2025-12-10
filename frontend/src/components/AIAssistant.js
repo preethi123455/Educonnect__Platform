@@ -2,9 +2,6 @@ import React, { useState } from 'react';
 import styles from "./styles";
 
 const AIAssistant = () => {
-
-  const groqApiKey = process.env.REACT_APP_GROQ_API_KEY; // ⭐ NEW
-
   const [messages, setMessages] = useState([
     { role: 'assistant', content: "Hello! I'm your AI learning assistant. How can I help you today?" }
   ]);
@@ -24,27 +21,15 @@ const AIAssistant = () => {
     try {
       const currentMessages = [...messages, userMessage];
 
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
+      const response = await fetch("https://educonnect-platform-backend.onrender.com/api/ask", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${groqApiKey}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: mode === 'general' ? 'llama-3.1-8b-instant' : 'llama-3.3-70b-versatile',
-          messages: [
-            {
-              role: 'system',
-              content:
-                mode === 'general'
-                  ? 'You are an AI learning assistant helping students.'
-                  : 'You are a coding expert helping programmers.',
-            },
-            ...currentMessages
-          ],
-          temperature: 0.7,
-          max_tokens: 1024,
-        }),
+          messages: currentMessages,
+          mode
+        })
       });
 
       const data = await response.json();
@@ -52,9 +37,9 @@ const AIAssistant = () => {
       setMessages(prev => [
         ...prev,
         {
-          role: 'assistant',
-          content: data.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response.",
-        },
+          role: "assistant",
+          content: data?.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response.",
+        }
       ]);
 
     } catch (error) {
@@ -99,7 +84,7 @@ const AIAssistant = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder={`Ask the assistant...`}
+            placeholder="Ask the assistant..."
             style={{
               flex: 1,
               padding: '12px 15px',

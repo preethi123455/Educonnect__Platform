@@ -4,6 +4,7 @@ const cors = require('cors');
 const faceapi = require('face-api.js');
 const canvas = require('canvas');
 const path = require('path');
+const fetch = require('node-fetch');
 require('dotenv').config();
 
 const { Canvas, Image, ImageData } = canvas;
@@ -81,6 +82,35 @@ async function getFaceDescriptor(imageBase64) {
 
   return Array.from(detection.descriptor);
 }
+
+// ----------------------------
+// NEW: Groq API Route
+// ----------------------------
+app.post("/api/ask", async (req, res) => {
+  const { messages, mode } = req.body;
+
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: mode === "general" ? "llama-3.1-8b-instant" : "llama-3.3-70b-versatile",
+        messages,
+        max_tokens: 1024
+      })
+    });
+
+    const data = await response.json();
+    return res.json(data);
+
+  } catch (error) {
+    console.error("Groq API Error:", error.message);
+    return res.status(500).json({ error: "Groq request failed" });
+  }
+});
 
 // Signup
 app.post('/signup', async (req, res) => {
