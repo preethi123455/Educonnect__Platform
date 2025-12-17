@@ -1,99 +1,114 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
-
-const API_KEY = "your_groq_api_key"; // Replace with your Groq API key
 
 const DailyChallenge = () => {
   const [challenge, setChallenge] = useState("");
   const [userAnswer, setUserAnswer] = useState("");
-  const [points, setPoints] = useState(0);
   const [feedback, setFeedback] = useState("");
+  const [points, setPoints] = useState(0);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchChallenge();
   }, []);
 
   const fetchChallenge = async () => {
+    setLoading(true);
     try {
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "mixtral-8x7b-32768",
-          messages: [{ role: "system", content: "Generate an educational daily challenge question related to English or Tamil language learning." }],
-          temperature: 0.7,
-          max_tokens: 150,
-        })
-      });
+      const response = await fetch(
+        "https://educonnect-platform-backend.onrender.com/api/daily-challenge",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "generate" }),
+        }
+      );
+
       const data = await response.json();
-      setChallenge(data.choices?.[0]?.message?.content || "Try again later!");
+      setChallenge(data.challenge || "No challenge available today.");
     } catch (error) {
-      console.error("Error fetching challenge:", error);
+      setChallenge("Error loading challenge. Try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSubmit = async () => {
+    if (!userAnswer.trim()) return;
+
+    setLoading(true);
     try {
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "mixtral-8x7b-32768",
-          messages: [{ role: "user", content: `Check if this answer is correct: ${userAnswer}` }],
-          temperature: 0.7,
-          max_tokens: 100,
-        })
-      });
+      const response = await fetch(
+        "https://educonnect-platform-backend.onrender.com/api/daily-challenge",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "evaluate",
+            answer: userAnswer,
+            challenge,
+          }),
+        }
+      );
+
       const data = await response.json();
-      const aiFeedback = data.choices?.[0]?.message?.content || "No response";
-      setFeedback(aiFeedback);
-      if (aiFeedback.toLowerCase().includes("correct")) {
-        setPoints(points + 10);
+      setFeedback(data.feedback || "No feedback received.");
+
+      if (data.correct) {
+        setPoints((prev) => prev + 10);
       }
     } catch (error) {
-      console.error("Error checking answer:", error);
+      setFeedback("Error evaluating answer.");
+    } finally {
+      setLoading(false);
     }
   };
 
   const generateCertificate = () => {
     const doc = new jsPDF();
-    doc.setFillColor("#6a0dad");
+    doc.setFillColor(106, 13, 173);
     doc.rect(0, 0, 210, 297, "F");
     doc.setTextColor("white");
-    doc.setFontSize(24);
-    doc.text("Certificate of Achievement", 60, 50);
-    doc.setFontSize(16);
-    doc.text("Awarded to", 90, 80);
+    doc.setFontSize(26);
+    doc.text("Certificate of Achievement", 40, 50);
+    doc.setFontSize(18);
+    doc.text("Awarded for completing Daily Challenges", 30, 90);
     doc.setFontSize(22);
     doc.setTextColor("yellow");
-    doc.text("[Your Name]", 85, 100);
-    doc.setFontSize(16);
-    doc.setTextColor("white");
-    doc.text(`For scoring ${points} points in Daily Challenges`, 40, 120);
-    doc.save("Certificate.pdf");
+    doc.text(`Score: ${points} points`, 60, 130);
+    doc.save("Daily_Challenge_Certificate.pdf");
   };
 
   return (
     <div style={styles.container}>
-      <h2>📖 Daily Challenge</h2>
-      <p style={styles.challenge}>{challenge}</p>
-      <textarea 
-        value={userAnswer} 
-        onChange={(e) => setUserAnswer(e.target.value)} 
-        placeholder="Enter your answer..." 
+      <h2>📘 Daily Language Challenge</h2>
+
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        <p style={styles.challenge}>{challenge}</p>
+      )}
+
+      <textarea
+        value={userAnswer}
+        onChange={(e) => setUserAnswer(e.target.value)}
+        placeholder="Type your answer..."
         style={styles.input}
       />
-      <button onClick={handleSubmit} style={styles.button}>Submit</button>
+
+      <button onClick={handleSubmit} style={styles.button} disabled={loading}>
+        Submit Answer
+      </button>
+
       {feedback && <p style={styles.feedback}>{feedback}</p>}
+
       <p style={styles.points}>🏆 Points: {points}</p>
-      <button onClick={generateCertificate} style={styles.certButton}>Download Certificate</button>
+
+      {points > 0 && (
+        <button onClick={generateCertificate} style={styles.certButton}>
+          Download Certificate
+        </button>
+      )}
     </div>
   );
 };
@@ -102,43 +117,39 @@ const styles = {
   container: {
     backgroundColor: "#6a0dad",
     color: "white",
-    padding: "20px",
-    borderRadius: "10px",
-    width: "100%",
+    padding: "25px",
+    borderRadius: "12px",
     maxWidth: "600px",
-    margin: "20px auto",
+    margin: "30px auto",
     textAlign: "center",
-    fontFamily: "Arial, sans-serif",
   },
   challenge: {
     fontSize: "18px",
-    margin: "10px 0",
+    margin: "15px 0",
   },
   input: {
     width: "100%",
-    height: "80px",
+    height: "90px",
     padding: "10px",
-    borderRadius: "5px",
+    borderRadius: "6px",
     border: "none",
-    fontSize: "16px",
+    fontSize: "15px",
   },
   button: {
-    marginTop: "10px",
-    padding: "10px",
+    marginTop: "12px",
+    padding: "10px 20px",
     backgroundColor: "#fff",
     color: "#6a0dad",
     border: "none",
-    borderRadius: "5px",
-    fontSize: "16px",
+    borderRadius: "6px",
     cursor: "pointer",
   },
   feedback: {
     marginTop: "10px",
-    fontSize: "16px",
     fontWeight: "bold",
   },
   points: {
-    marginTop: "10px",
+    marginTop: "12px",
     fontSize: "18px",
     fontWeight: "bold",
   },
@@ -146,10 +157,8 @@ const styles = {
     marginTop: "10px",
     padding: "10px",
     backgroundColor: "yellow",
-    color: "black",
     border: "none",
-    borderRadius: "5px",
-    fontSize: "16px",
+    borderRadius: "6px",
     cursor: "pointer",
   },
 };

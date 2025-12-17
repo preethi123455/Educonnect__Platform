@@ -2,192 +2,235 @@ import React, { useState } from "react";
 import Tesseract from "tesseract.js";
 
 const DoubtSolver = () => {
-  const [query, setQuery] = useState("");
-  const [response, setResponse] = useState("");
+  const [messages, setMessages] = useState([
+    {
+      role: "assistant",
+      content:
+        "Hi! Upload an image or type your doubt. I’ll help you with English and Tamil learning ✨",
+    },
+  ]);
+
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [image, setImage] = useState(null);
   const [imageText, setImageText] = useState("");
+  const [error, setError] = useState(null);
 
-  const API_KEY = "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"; // Replace with valid API key
+  // -----------------------------
+  // IMAGE UPLOAD + OCR
+  // -----------------------------
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-  // Handle Image Upload
-  const handleImageUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setImage(URL.createObjectURL(file));
-      extractTextFromImage(file);
-    }
-  };
-
-  // Extract text from image using OCR (Tesseract.js)
-  const extractTextFromImage = async (file) => {
+    setImage(URL.createObjectURL(file));
     setLoading(true);
+    setError(null);
     setImageText("");
+
     try {
       const { data } = await Tesseract.recognize(file, "eng");
       setImageText(data.text.trim());
     } catch (err) {
       setError("Failed to extract text from image.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  // Send query to AI
-  const handleAskAI = async () => {
-    const inputText = imageText || query;
-    if (!inputText.trim()) {
-      setError("Please enter a doubt or upload an image.");
+  // -----------------------------
+  // FORMAT LONG TEXT FOR CLEAN DISPLAY
+  // -----------------------------
+  const formatText = (text) => {
+    return text
+      .replace(/\. /g, ".\n\n") // Add spacing after sentences
+      .replace(/docker/g, "\ndocker") // New line before each docker command
+      .replace(/\n\n\n/g, "\n\n"); // Remove excessive newlines
+  };
+
+  // -----------------------------
+  // SEND MESSAGE TO BACKEND AI
+  // -----------------------------
+  const handleSend = async () => {
+    const finalInput = imageText || input;
+
+    if (!finalInput.trim()) {
+      setError("Please type a doubt or upload an image.");
       return;
     }
 
+    const userMsg = { role: "user", content: finalInput };
+    const updated = [...messages, userMsg];
+
+    setMessages(updated);
+    setInput("");
+    setImageText("");
     setLoading(true);
-    setResponse("");
     setError(null);
 
     try {
-      const requestBody = {
-        model: "llama3-70b-8192",
-        messages: [
-          {
-            role: "system",
-            content: "You are an AI tutor specializing in English and Tamil language learning. Provide grammar corrections, vocabulary suggestions, and explanations."
-          },
-          { role: "user", content: inputText }
-        ],
-      };
-
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(requestBody),
-      });
+      const res = await fetch(
+        "https://educonnect-platform-backend.onrender.com/api/ask",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are an AI tutor specializing in English, Tamil, and technical explanation formatting. Always return clean, aligned, spaced content.",
+              },
+              ...updated,
+            ],
+            mode: "general",
+          }),
+        }
+      );
 
       const data = await res.json();
-      console.log("API Response:", data); // Debugging API response
 
-      if (res.status !== 200) {
-        throw new Error(data.error?.message || "Unexpected API error");
-      }
+      const aiResponse =
+        data?.choices?.[0]?.message?.content ||
+        "Sorry, I couldn't generate a response.";
 
-      if (data.choices && data.choices.length > 0) {
-        setResponse(data.choices[0].message.content);
-      } else {
-        throw new Error("Invalid response format");
-      }
-    } catch (error) {
-      console.error("Fetch Error:", error);
-      setError(error.message || "Error fetching response. Please try again.");
+      // Apply formatting before displaying
+      const formatted = formatText(aiResponse);
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: formatted },
+      ]);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Error connecting to AI. Try again later.",
+        },
+      ]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.heading}>Doubt-Solving AI</h2>
+    <div style={styles.wrapper}>
+      <h2 style={styles.heading}>Doubt Solver AI</h2>
 
-      {/* Text Input */}
+      <div style={styles.chatBox}>
+        {messages.map((m, i) => (
+          <div key={i} style={m.role === "user" ? styles.userMsg : styles.botMsg}>
+            <pre style={styles.pre}>{m.content}</pre>
+          </div>
+        ))}
+        {loading && <div style={styles.botMsg}>Thinking...</div>}
+      </div>
+
       <textarea
+        placeholder="Type your doubt..."
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
         style={styles.textarea}
-        placeholder="Enter your doubt here..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
       />
 
-      {/* Image Upload */}
-      <input type="file" accept="image/*" onChange={handleImageUpload} style={styles.fileInput} />
-      
-      {/* Show Uploaded Image */}
-      {image && <img src={image} alt="Uploaded Doubt" style={styles.image} />}
-      
-      {/* Show Extracted Text */}
+      <input type="file" accept="image/*" onChange={handleImageUpload} />
+
+      {image && <img src={image} alt="preview" style={styles.image} />}
+
       {imageText && (
-        <div style={styles.extractedText}>
-          <strong>Extracted Text:</strong> {imageText}
+        <div style={styles.extractedBox}>
+          <strong>Extracted Text:</strong>
+          <pre style={styles.pre}>{imageText}</pre>
         </div>
       )}
 
-      {/* Solve Doubt Button */}
-      <button style={styles.button} onClick={handleAskAI} disabled={loading}>
-        {loading ? "Thinking..." : "Solve Doubt"}
+      <button onClick={handleSend} disabled={loading} style={styles.button}>
+        Solve Doubt
       </button>
 
-      {/* Error Message */}
       {error && <div style={styles.error}>{error}</div>}
-
-      {/* AI Response */}
-      {response && <div style={styles.response}>{response}</div>}
     </div>
   );
 };
 
 const styles = {
-  container: {
-    maxWidth: "600px",
-    margin: "50px auto",
+  wrapper: {
+    maxWidth: "700px",
+    margin: "30px auto",
     padding: "20px",
-    backgroundColor: "#f5f0ff",
-    borderRadius: "10px",
-    boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)",
-    textAlign: "center",
+    background: "#f5f0ff",
+    borderRadius: "12px",
   },
-  heading: { color: "#6a0dad" },
+  heading: {
+    color: "#6a0dad",
+    fontSize: "24px",
+    marginBottom: "15px",
+  },
+  chatBox: {
+    background: "#fff",
+    minHeight: "220px",
+    padding: "10px",
+    overflowY: "auto",
+    borderRadius: "10px",
+    marginBottom: "10px",
+  },
+  userMsg: {
+    background: "#e8dbff",
+    padding: "8px",
+    textAlign: "right",
+    marginBottom: "8px",
+    borderRadius: "6px",
+    whiteSpace: "pre-wrap",
+  },
+  botMsg: {
+    background: "#ffffff",
+    border: "1px solid #ddd",
+    padding: "8px",
+    marginBottom: "8px",
+    borderRadius: "6px",
+    whiteSpace: "pre-wrap",
+  },
+  pre: {
+    whiteSpace: "pre-wrap",
+    fontFamily: "monospace",
+    fontSize: "14px",
+    margin: 0,
+  },
   textarea: {
     width: "100%",
-    height: "100px",
     padding: "10px",
-    borderRadius: "5px",
+    height: "80px",
+    borderRadius: "8px",
     border: "1px solid #6a0dad",
-    outline: "none",
-    resize: "none",
-  },
-  fileInput: {
-    marginTop: "10px",
+    marginBottom: "10px",
   },
   image: {
-    marginTop: "10px",
     width: "100%",
-    maxHeight: "200px",
-    objectFit: "cover",
-    borderRadius: "5px",
-    border: "1px solid #6a0dad",
-  },
-  extractedText: {
+    borderRadius: "6px",
     marginTop: "10px",
+  },
+  extractedBox: {
+    marginTop: "10px",
+    background: "#fff8e1",
     padding: "10px",
-    backgroundColor: "#fff8e1",
-    borderRadius: "5px",
-    border: "1px solid #ffa000",
-    textAlign: "left",
+    borderRadius: "6px",
   },
   button: {
-    marginTop: "10px",
-    padding: "10px 20px",
-    backgroundColor: "#6a0dad",
+    width: "100%",
+    padding: "12px",
+    background: "#6a0dad",
     color: "white",
     border: "none",
-    borderRadius: "5px",
+    borderRadius: "8px",
     cursor: "pointer",
-  },
-  response: {
-    marginTop: "20px",
-    padding: "10px",
-    backgroundColor: "white",
-    border: "1px solid #6a0dad",
-    borderRadius: "5px",
-    textAlign: "left",
   },
   error: {
     marginTop: "10px",
+    background: "#ffdddd",
     padding: "10px",
-    backgroundColor: "#ffcccc",
-    color: "#d8000c",
-    border: "1px solid #d8000c",
-    borderRadius: "5px",
-    textAlign: "center",
+    borderRadius: "6px",
+    color: "red",
   },
 };
 

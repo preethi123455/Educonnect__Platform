@@ -1,17 +1,21 @@
 import React, { useState } from "react";
 
-const QuizGenerator = () => {
-  const groqApiKey = "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"; // Replace with your actual API key
-  const [userInput, setUserInput] = useState("");
+export default function QuizGenerator() {
+  const BACKEND_URL = "https://educonnect-platform-backend.onrender.com/api/ask";
+
+  const [topic, setTopic] = useState("");
   const [quiz, setQuiz] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [answers, setAnswers] = useState({});
   const [feedback, setFeedback] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const handleContentSubmit = async () => {
-    if (!userInput.trim()) {
-      setError("Please enter a topic before generating a quiz.");
+  // -----------------------------
+  // GENERATE QUIZ FROM AI (uses backend)
+  // -----------------------------
+  const generateQuiz = async () => {
+    if (!topic.trim()) {
+      setError("Please enter a topic before generating the quiz.");
       return;
     }
 
@@ -21,143 +25,218 @@ const QuizGenerator = () => {
     setFeedback(null);
 
     try {
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const res = await fetch(BACKEND_URL, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${groqApiKey}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "llama3-8b-8192",
+          mode: "general",
           messages: [
             {
               role: "system",
-              content: `Generate a multiple-choice quiz with 3 questions on the given topic.
-                        Format response as a JSON array. Each object should have:
-                        - "question": string
-                        - "options": array of 4 strings
-                        - "correctAnswer": string`,
+              content:
+                `Generate a JSON array of 3 MCQ questions based on a topic. 
+                 Format STRICTLY as:
+                 [
+                   {
+                     "question": "text",
+                     "options": ["A", "B", "C", "D"],
+                     "correctAnswer": "A"
+                   }
+                 ]`
             },
-            { role: "user", content: userInput },
+            { role: "user", content: `Create a quiz on: ${topic}` },
           ],
-          temperature: 0.7,
-          max_tokens: 1024,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
-      }
+      const data = await res.json();
+      const raw = data?.choices?.[0]?.message?.content || "";
 
-      const data = await response.json();
-      console.log("Raw API Response:", data.choices[0].message.content); // Debugging
+      // Extract JSON safely
+      const match = raw.match(/\[([\s\S]*)\]/);
+      if (!match) throw new Error("Invalid quiz response format.");
 
-      // ✅ Extract JSON portion correctly
-      const match = data.choices[0].message.content.match(/\[([\s\S]*)\]/);
-      if (!match) throw new Error("Invalid JSON format received.");
-      const parsedQuiz = JSON.parse(match[0]);
-
-      setQuiz(parsedQuiz);
+      const parsed = JSON.parse(match[0]);
+      setQuiz(parsed);
       setAnswers({});
-    } catch (error) {
-      console.error("Error generating quiz:", error);
-      setError(error.message || "Failed to generate quiz. Please try again.");
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to generate quiz. Try again.");
     }
+
+    setLoading(false);
   };
 
-  const handleAnswerChange = (questionIndex, selectedOption) => {
-    setAnswers({ ...answers, [questionIndex]: selectedOption });
+  // -----------------------------
+  // UPDATE ANSWER SELECTION
+  // -----------------------------
+  const handleAnswerChange = (index, value) => {
+    setAnswers({ ...answers, [index]: value });
   };
 
-  const handleSubmitAnswers = () => {
-    let correctCount = 0;
+  // -----------------------------
+  // SUBMIT QUIZ + SHOW FEEDBACK
+  // -----------------------------
+  const evaluateQuiz = () => {
+    let correct = 0;
     let recommendations = [];
 
-    quiz.forEach((q, index) => {
-      if (answers[index] === q.correctAnswer) {
-        correctCount++;
-      } else {
-        recommendations.push(userInput); // Suggest related topic as course
-      }
+    quiz.forEach((q, i) => {
+      if (answers[i] === q.correctAnswer) correct++;
+      else recommendations.push(`Revise more about: ${topic}`);
     });
 
     setFeedback({
-      score: `${correctCount} / ${quiz.length}`,
-      message: correctCount === quiz.length ? "Great job! Keep it up!" : "You can improve! Here are some suggestions.",
-      recommendations: [...new Set(recommendations)].map((topic) => `Consider learning more about ${topic}.`),
+      score: `${correct}/${quiz.length}`,
+      message: correct === quiz.length ? "Excellent! 💯" : "You can improve!",
+      recommendations: [...new Set(recommendations)],
     });
   };
 
   return (
-    <div style={{ padding: "20px", maxWidth: "600px", margin: "auto" }}>
-      <h2>AI Quiz Generator</h2>
+    <div style={styles.wrapper}>
+      <h2 style={styles.heading}>AI Quiz Generator</h2>
+
       <input
         type="text"
-        value={userInput}
-        onChange={(e) => setUserInput(e.target.value)}
-        placeholder="Enter a topic (e.g., Science, History, JavaScript)"
-        style={{ width: "100%", padding: "10px", marginBottom: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
+        placeholder="Enter a topic (e.g., JavaScript, Science)"
+        value={topic}
+        onChange={(e) => setTopic(e.target.value)}
+        style={styles.input}
       />
-      <button
-        onClick={handleContentSubmit}
-        style={{ padding: "10px 15px", backgroundColor: "#6a0dad", color: "white", border: "none", borderRadius: "5px", cursor: "pointer" }}
-        disabled={loading}
-      >
+
+      <button onClick={generateQuiz} disabled={loading} style={styles.button}>
         {loading ? "Generating..." : "Generate Quiz"}
       </button>
 
-      {error && <p style={{ color: "red", marginTop: "10px" }}>{error}</p>}
+      {error && <p style={styles.error}>{error}</p>}
 
+      {/* QUIZ DISPLAY */}
       {quiz.length > 0 && (
-        <div style={{ marginTop: "20px", padding: "10px", border: "1px solid #ddd", borderRadius: "5px" }}>
-          <h3>Quiz:</h3>
-          {quiz.map((q, index) => (
-            <div key={index}>
-              <p><strong>{q.question}</strong></p>
-              {q.options.map((option, optionIndex) => (
-                <label key={optionIndex} style={{ display: "block", marginBottom: "5px" }}>
+        <div style={styles.quizBox}>
+          <h3 style={{ color: "#6a0dad" }}>Quiz Questions</h3>
+
+          {quiz.map((q, i) => (
+            <div key={i} style={styles.questionBlock}>
+              <p style={styles.questionText}>
+                <strong>{i + 1}. {q.question}</strong>
+              </p>
+
+              {q.options.map((opt, idx) => (
+                <label key={idx} style={styles.optionRow}>
                   <input
                     type="radio"
-                    name={`question-${index}`}
-                    value={option}
-                    checked={answers[index] === option}
-                    onChange={() => handleAnswerChange(index, option)}
+                    name={`q-${i}`}
+                    value={opt}
+                    checked={answers[i] === opt}
+                    onChange={() => handleAnswerChange(i, opt)}
                   />
-                  {option}
+                  {opt}
                 </label>
               ))}
             </div>
           ))}
-          <button
-            onClick={handleSubmitAnswers}
-            style={{ marginTop: "10px", padding: "10px 15px", backgroundColor: "#28a745", color: "white", border: "none", borderRadius: "5px", cursor: "pointer" }}
-          >
+
+          <button onClick={evaluateQuiz} style={styles.submitBtn}>
             Submit Answers
           </button>
         </div>
       )}
 
+      {/* FEEDBACK DISPLAY */}
       {feedback && (
-        <div style={{ marginTop: "20px", padding: "10px", border: "1px solid #ddd", borderRadius: "5px" }}>
-          <h3>Results:</h3>
-          <p>Score: {feedback.score}</p>
+        <div style={styles.feedbackBox}>
+          <h3 style={{ color: "#28a745" }}>Your Result</h3>
+          <p><strong>Score:</strong> {feedback.score}</p>
           <p>{feedback.message}</p>
+
           {feedback.recommendations.length > 0 && (
-            <div>
-              <h4>Course Recommendations:</h4>
+            <>
+              <h4>Recommendations:</h4>
               <ul>
-                {feedback.recommendations.map((rec, index) => (
-                  <li key={index}>{rec}</li>
+                {feedback.recommendations.map((rec, idx) => (
+                  <li key={idx}>{rec}</li>
                 ))}
               </ul>
-            </div>
+            </>
           )}
         </div>
       )}
     </div>
   );
+}
+
+// -----------------------------
+// INTERNAL CSS (Like AiAssistance.js)
+// -----------------------------
+const styles = {
+  wrapper: {
+    padding: "20px",
+    maxWidth: "700px",
+    margin: "40px auto",
+    background: "#f5f0ff",
+    borderRadius: "12px",
+  },
+  heading: {
+    color: "#6a0dad",
+    fontSize: "24px",
+    marginBottom: "15px",
+    textAlign: "center",
+  },
+  input: {
+    width: "100%",
+    padding: "12px",
+    borderRadius: "6px",
+    border: "1px solid #ccc",
+    marginBottom: "10px",
+  },
+  button: {
+    padding: "10px 20px",
+    background: "#6a0dad",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    width: "100%",
+  },
+  error: {
+    marginTop: "10px",
+    color: "red",
+  },
+  quizBox: {
+    marginTop: "20px",
+    padding: "15px",
+    background: "white",
+    borderRadius: "10px",
+    border: "1px solid #ddd",
+  },
+  questionBlock: {
+    marginBottom: "15px",
+  },
+  questionText: {
+    marginBottom: "8px",
+  },
+  optionRow: {
+    display: "block",
+    marginBottom: "6px",
+  },
+  submitBtn: {
+    padding: "10px",
+    background: "#28a745",
+    color: "white",
+    border: "none",
+    width: "100%",
+    borderRadius: "6px",
+    cursor: "pointer",
+    marginTop: "10px",
+  },
+  feedbackBox: {
+    marginTop: "20px",
+    padding: "15px",
+    background: "#fff",
+    borderRadius: "10px",
+    border: "1px solid #ddd",
+  },
 };
 
-export default QuizGenerator;
+

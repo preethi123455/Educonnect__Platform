@@ -1,135 +1,152 @@
-import React, { useState, useContext, useEffect } from 'react';
-import { AppContext } from './AppContext'; // Ensure correct path
+import React, { useState, useContext, useEffect } from "react";
+import { AppContext } from "./AppContext";
 
-const API_KEY = "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"; // Replace with your actual API key
+export default function StudySchedulePlanner() {
+  const BACKEND_URL = "https://educonnect-platform-backend.onrender.com/api/ask";
 
-const StudySchedulePlanner = () => {
   const { addPoints } = useContext(AppContext);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [schedule, setSchedule] = useState([]);
   const [userInput, setUserInput] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
-  const notificationAudio = new Audio('/notification.mp3'); // Ensure this file exists
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Load saved schedule from localStorage
+  const notificationSound = new Audio("/notification.mp3");
+
+  // -----------------------------
+  // Load saved schedule
+  // -----------------------------
   useEffect(() => {
-    const savedSchedule = localStorage.getItem('studySchedule');
-    if (savedSchedule) {
+    const saved = localStorage.getItem("studySchedule");
+    if (saved) {
       try {
-        setSchedule(JSON.parse(savedSchedule));
-      } catch (e) {
-        console.error('Error loading saved schedule:', e);
+        setSchedule(JSON.parse(saved));
+      } catch {
+        console.error("Schedule parse error");
       }
     }
   }, []);
 
-  // Save schedule to localStorage whenever it changes
+  // Save schedule on change
   useEffect(() => {
-    localStorage.setItem('studySchedule', JSON.stringify(schedule));
+    localStorage.setItem("studySchedule", JSON.stringify(schedule));
   }, [schedule]);
 
-  const handleDateChange = (event) => {
-    setSelectedDate(new Date(event.target.value));
-  };
-
-  const generateStudyPlan = async () => {
+  // -----------------------------
+  // Generate study plan via backend AI
+  // -----------------------------
+  const generatePlan = async () => {
     if (!userInput.trim()) {
-      alert("Please enter study topics or tasks.");
+      setError("Please enter your study topics.");
       return;
     }
 
-    setAiLoading(true);
+    setError(null);
+    setLoading(true);
 
     try {
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const res = await fetch(BACKEND_URL, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${API_KEY}`,
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "llama3-8b-8192",
+          mode: "general",
           messages: [
             {
               role: "system",
-              content: `You are an AI assistant that creates structured study schedules. Return a JSON array of study blocks with start time, end time, task, and break suggestions. No extra text, just JSON.`
+              content: `Return ONLY a valid JSON array of study plan items.
+Each item must follow this exact structure:
+
+{
+  "start": "9:00 AM",
+  "end": "10:30 AM",
+  "task": "Study topic",
+  "break": "5-minute break"
+}
+
+No extra text. No formatting outside JSON.`
             },
             {
               role: "user",
-              content: `Create a structured study plan for ${selectedDate.toDateString()}.
-                        Topics: ${userInput}.
-                        Include study blocks, short breaks, lunch, and relaxation time.
-                        Format response as JSON: [{"start": "9:00 AM", "end": "10:30 AM", "task": "Study Data Structures", "break": "5-minute walk"}]`
+              content: `Generate a structured study plan for ${selectedDate.toDateString()}
+Topics: ${userInput}`
             }
-          ],
-          temperature: 0.7,
-          max_tokens: 300
+          ]
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
+      const data = await res.json();
+      const raw = data?.choices?.[0]?.message?.content?.trim() || "";
 
-      const data = await response.json();
-      const aiResponse = data.choices?.[0]?.message?.content;
+      const jsonMatch = raw.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error("AI returned invalid JSON.");
 
-      if (!aiResponse) {
-        throw new Error("Invalid AI response.");
-      }
-
-      try {
-        const parsedSchedule = JSON.parse(aiResponse);
-        setSchedule(parsedSchedule);
-        addPoints(10); // Award points after a successful plan
-      } catch (parseError) {
-        console.error("Error parsing AI response:", parseError);
-        alert("The AI response could not be parsed. Please try again.");
-      }
-
-    } catch (error) {
-      console.error("AI Error:", error);
-      alert("Failed to generate a study plan. Please try again.");
+      const parsed = JSON.parse(jsonMatch[0]);
+      setSchedule(parsed);
+      addPoints(10);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to generate study plan. Try again.");
     }
 
-    setAiLoading(false);
+    setLoading(false);
   };
 
+  // -----------------------------
+  // Notification sound
+  // -----------------------------
   const playNotification = () => {
-    notificationAudio.play().catch(err => console.error("Audio play error:", err));
+    notificationSound.play().catch(() => {});
   };
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.heading}>📚 Study Schedule Planner</h2>
+    <div style={styles.wrapper}>
+      <h2 style={styles.heading}>📚 AI Study Schedule Planner</h2>
 
-      <div style={styles.inputContainer}>
-        <label style={styles.label}>Select Date:</label>
-        <input type="date" onChange={handleDateChange} style={styles.input} />
+      {/* Date Picker */}
+      <div style={styles.inputBlock}>
+        <label style={styles.label}>Select Date</label>
+        <input
+          type="date"
+          onChange={(e) => setSelectedDate(new Date(e.target.value))}
+          style={styles.input}
+        />
       </div>
 
-      <div style={styles.inputContainer}>
-        <label style={styles.label}>Enter Study Topics:</label>
+      {/* Topic Input */}
+      <div style={styles.inputBlock}>
+        <label style={styles.label}>Study Topics</label>
         <input
           type="text"
+          placeholder="e.g., ML, DSA, English Grammar"
           value={userInput}
           onChange={(e) => setUserInput(e.target.value)}
           style={styles.input}
-          placeholder="e.g. Machine Learning, Data Structures"
         />
-        <button onClick={generateStudyPlan} style={styles.button} disabled={aiLoading}>
-          {aiLoading ? "Generating..." : "Generate Plan"}
-        </button>
       </div>
 
+      <button onClick={generatePlan} disabled={loading} style={styles.button}>
+        {loading ? "Generating..." : "Generate Plan"}
+      </button>
+
+      {error && <p style={styles.error}>{error}</p>}
+
+      {/* Schedule Display */}
       {schedule.length > 0 && (
-        <div style={styles.scheduleContainer}>
-          <h3 style={styles.subHeading}>📅 Plan for {selectedDate.toDateString()}</h3>
+        <div style={styles.card}>
+          <h3 style={styles.subheading}>📅 Study Plan for {selectedDate.toDateString()}</h3>
+
           <ul style={styles.list}>
-            {schedule.map((item, index) => (
-              <li key={index} style={styles.listItem} onClick={playNotification}>
-                <strong>{item.start} - {item.end}</strong>: {item.task}
-                <br /> <em>Break: {item.break}</em>
+            {schedule.map((block, i) => (
+              <li
+                key={i}
+                onClick={playNotification}
+                style={styles.listItem}
+              >
+                <strong>{block.start} - {block.end}</strong>  
+                <br />
+                {block.task}
+                <br />
+                <em>Break: {block.break}</em>
               </li>
             ))}
           </ul>
@@ -137,63 +154,75 @@ const StudySchedulePlanner = () => {
       )}
     </div>
   );
-};
+}
 
+// -----------------------------
+// INTERNAL CSS (AiAssistance.js STYLE)
+// -----------------------------
 const styles = {
-  container: {
-    backgroundColor: "#F9F3FF",
+  wrapper: {
+    maxWidth: "650px",
+    margin: "30px auto",
     padding: "20px",
-    borderRadius: "10px",
-    maxWidth: "600px",
-    margin: "auto",
-    textAlign: "center",
-    boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
+    background: "#f5f0ff",
+    borderRadius: "12px"
   },
   heading: {
+    textAlign: "center",
     color: "#6a0dad",
-    marginBottom: "20px",
+    fontSize: "26px",
+    marginBottom: "20px"
   },
-  inputContainer: {
-    marginBottom: "15px",
+  inputBlock: {
+    marginBottom: "15px"
   },
   label: {
-    fontWeight: "bold",
     display: "block",
-    marginBottom: "5px",
+    fontWeight: "bold",
+    marginBottom: "6px",
+    color: "#4b0082"
   },
   input: {
-    width: "80%",
-    padding: "8px",
-    border: "1px solid #6a0dad",
-    borderRadius: "5px",
+    width: "100%",
+    padding: "10px",
+    borderRadius: "6px",
+    border: "1px solid #ccc"
   },
   button: {
-    backgroundColor: "#6a0dad",
+    width: "100%",
+    padding: "12px",
+    background: "#6a0dad",
     color: "white",
     border: "none",
-    padding: "10px",
-    borderRadius: "5px",
+    borderRadius: "8px",
     cursor: "pointer",
-    marginLeft: "10px",
+    marginTop: "10px"
   },
-  scheduleContainer: {
+  error: {
+    marginTop: "10px",
+    color: "red",
+    textAlign: "center"
+  },
+  card: {
     marginTop: "20px",
+    background: "#fff",
+    padding: "15px",
+    borderRadius: "10px",
+    border: "1px solid #ddd"
   },
-  subHeading: {
+  subheading: {
     color: "#6a0dad",
-    marginBottom: "10px",
+    marginBottom: "10px"
   },
   list: {
-    listStyleType: "none",
-    padding: "0",
+    listStyle: "none",
+    padding: "0"
   },
   listItem: {
-    backgroundColor: "#EDE7F6",
-    padding: "10px",
-    margin: "5px 0",
-    borderRadius: "5px",
-    cursor: "pointer",
-  },
+    background: "#e8dbff",
+    padding: "12px",
+    borderRadius: "8px",
+    marginBottom: "10px",
+    cursor: "pointer"
+  }
 };
-
-export default StudySchedulePlanner;

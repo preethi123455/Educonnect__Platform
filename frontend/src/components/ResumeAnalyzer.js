@@ -1,139 +1,210 @@
-import React, { useState, useContext } from 'react';
-import { AppContext } from './AppContext';
-import styles from './styles';
+import React, { useState } from "react";
 
-const ResumeAnalyzer = () => {
-  const { groqApiKey } = useContext(AppContext);
-  const [resumeText, setResumeText] = useState('');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysisResults, setAnalysisResults] = useState(null);
+export default function ResumeAnalyzer() {
+  const BACKEND_URL = "https://educonnect-platform-backend.onrender.com/api/ask";
+
+  const [resumeText, setResumeText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState(null);
 
-  const handleResumeInput = (e) => {
-    setResumeText(e.target.value);
-  };
-
+  // -----------------------------------
+  // Analyze Resume (AI via backend)
+  // -----------------------------------
   const analyzeResume = async () => {
     if (!resumeText.trim()) {
-      setError("Please enter a valid resume.");
+      setError("Please paste your resume text.");
       return;
     }
 
-    setAnalyzing(true);
     setError(null);
-    setAnalysisResults(null);
+    setLoading(true);
+    setAnalysis(null);
 
     try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${groqApiKey}`
-        },
+      const res = await fetch(BACKEND_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: 'llama3-8b-8192',
+          mode: "general",
           messages: [
             {
-              role: 'system',
-              content: `You are a resume analysis AI. Strictly return only a valid JSON response with no explanations, no extra text, and no formatting issues. The JSON must follow this exact structure:
+              role: "system",
+              content: `You are a resume analysis AI. 
+              Strictly return valid JSON using this exact format:
+
               {
-                "skills": [{"name": "JavaScript", "level": 80, "recommendation": "Improve React skills"}],
-                "recommendations": ["Take an advanced React course"],
-                "strengths": ["Strong problem-solving skills"],
-                "weaknesses": ["Limited cloud experience"],
-                "jobFit": [{"title": "Frontend Developer", "match": 85, "reason": "Strong JavaScript skills"}]
-              }`
+                "skills": [{"name": "JavaScript", "level": 80, "recommendation": "Improve React"}],
+                "strengths": ["Strong logic"],
+                "weaknesses": ["Low cloud exposure"],
+                "recommendations": ["Learn AWS"],
+                "jobFit": [{"title": "Frontend Developer", "match": 85, "reason": "Strong JS"}]
+              }
+
+              Do NOT add explanations or text outside JSON.
+              `
             },
             {
-              role: 'user',
-              content: `Analyze this resume:\n\n${resumeText}`
+              role: "user",
+              content: `Analyze this resume:\n${resumeText}`
             }
-          ],
-          temperature: 0.7,
-          max_tokens: 1024
+          ]
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
+      const data = await res.json();
+      const raw = data?.choices?.[0]?.message?.content?.trim() || "";
 
-      const data = await response.json();
-      let rawContent = data.choices[0]?.message?.content?.trim();
+      // Extract JSON securely
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("Invalid AI response format.");
 
-      // Extract JSON using regex (Handles extra text issue)
-      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error("Failed to extract valid JSON from response.");
-      }
-
-      const parsedResults = JSON.parse(jsonMatch[0]);
-
-      setAnalysisResults(parsedResults);
-    } catch (error) {
-      console.error('Error analyzing resume:', error);
-      setError(error.message || 'An unexpected error occurred.');
+      const parsed = JSON.parse(jsonMatch[0]);
+      setAnalysis(parsed);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to analyze resume. Please try again.");
     } finally {
-      setAnalyzing(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div>
-      <h2 style={{ color: '#6a0dad', marginBottom: '20px' }}>AI Resume Analyzer</h2>
+    <div style={styles.wrapper}>
+      <h2 style={styles.heading}>AI Resume Analyzer</h2>
+
+      {/* Textarea */}
       <textarea
         placeholder="Paste your resume text here..."
-        style={{ width: '100%', minHeight: '250px', padding: '15px', borderRadius: '8px', border: '1px solid #e0e0e0', marginBottom: '20px' }}
         value={resumeText}
-        onChange={handleResumeInput}
+        onChange={(e) => setResumeText(e.target.value)}
+        style={styles.textarea}
       />
-      {error && <div style={{ color: '#d32f2f', marginBottom: '15px', padding: '10px', background: '#ffebee' }}>{error}</div>}
-      <button onClick={analyzeResume} style={styles.button} disabled={!resumeText.trim() || analyzing}>
-        {analyzing ? "Analyzing..." : "Analyze Resume"}
+
+      {error && <div style={styles.error}>{error}</div>}
+
+      {/* Analyze Button */}
+      <button onClick={analyzeResume} disabled={loading} style={styles.button}>
+        {loading ? "Analyzing..." : "Analyze Resume"}
       </button>
 
-      {analysisResults && (
+      {/* Results */}
+      {analysis && (
         <div style={styles.card}>
-          <h3>Analysis Results</h3>
+          <h3 style={styles.title}>Analysis Report</h3>
 
-          <h4>✅ Skills:</h4>
+          {/* Skills */}
+          <h4 style={styles.sectionTitle}>🛠 Skills</h4>
           <ul>
-            {analysisResults.skills?.map((skill, index) => (
-              <li key={index}><strong>{skill.name}</strong>: {skill.level}% - {skill.recommendation}</li>
+            {analysis.skills?.map((s, i) => (
+              <li key={i}>
+                <strong>{s.name}</strong> – {s.level}%  
+                <br />
+                <span style={{ color: "#6a0dad" }}>
+                  Recommendation: {s.recommendation}
+                </span>
+              </li>
             ))}
           </ul>
 
-          <h4>🟢 Strengths:</h4>
+          {/* Strengths */}
+          <h4 style={styles.sectionTitle}>💪 Strengths</h4>
           <ul>
-            {analysisResults.strengths?.map((strength, index) => (
-              <li key={index}>{strength}</li>
+            {analysis.strengths?.map((str, i) => (
+              <li key={i}>{str}</li>
             ))}
           </ul>
 
-          <h4>🟡 Areas for Improvement:</h4>
+          {/* Weaknesses */}
+          <h4 style={styles.sectionTitle}>⚠ Areas for Improvement</h4>
           <ul>
-            {analysisResults.weaknesses?.map((weakness, index) => (
-              <li key={index}>{weakness}</li>
+            {analysis.weaknesses?.map((w, i) => (
+              <li key={i}>{w}</li>
             ))}
           </ul>
 
-          <h4>📌 Recommendations:</h4>
+          {/* Recommendations */}
+          <h4 style={styles.sectionTitle}>📌 Recommendations</h4>
           <ul>
-            {analysisResults.recommendations?.map((rec, index) => (
-              <li key={index}>{rec}</li>
+            {analysis.recommendations?.map((rec, i) => (
+              <li key={i}>{rec}</li>
             ))}
           </ul>
 
-          <h4>💼 Job Fit Suggestions:</h4>
+          {/* Job Fit */}
+          <h4 style={styles.sectionTitle}>💼 Job Fit Suggestions</h4>
           <ul>
-            {analysisResults.jobFit?.map((job, index) => (
-              <li key={index}><strong>{job.title}</strong> - Match: {job.match}% | Reason: {job.reason}</li>
+            {analysis.jobFit?.map((job, i) => (
+              <li key={i}>
+                <strong>{job.title}</strong>  
+                <br />
+                Match: {job.match}%  
+                <br />
+                Reason: {job.reason}
+              </li>
             ))}
           </ul>
         </div>
       )}
     </div>
   );
-};
+}
 
-export default ResumeAnalyzer;
+// -----------------------------------
+// Internal CSS (AiAssistance.js Style)
+// -----------------------------------
+const styles = {
+  wrapper: {
+    maxWidth: "800px",
+    margin: "30px auto",
+    padding: "20px",
+    background: "#f5f0ff",
+    borderRadius: "12px"
+  },
+  heading: {
+    color: "#6a0dad",
+    textAlign: "center",
+    fontSize: "26px",
+    marginBottom: "20px"
+  },
+  textarea: {
+    width: "100%",
+    minHeight: "200px",
+    padding: "12px",
+    borderRadius: "8px",
+    border: "1px solid #ccc",
+    marginBottom: "10px"
+  },
+  button: {
+    width: "100%",
+    padding: "12px",
+    background: "#6a0dad",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    marginBottom: "15px"
+  },
+  error: {
+    background: "#ffebee",
+    color: "#d32f2f",
+    padding: "10px",
+    borderRadius: "6px",
+    marginBottom: "10px"
+  },
+  card: {
+    background: "white",
+    padding: "20px",
+    borderRadius: "12px",
+    border: "1px solid #ddd",
+    marginTop: "20px"
+  },
+  title: {
+    color: "#6a0dad",
+    marginBottom: "10px"
+  },
+  sectionTitle: {
+    marginTop: "15px",
+    color: "#4a0072"
+  }
+};

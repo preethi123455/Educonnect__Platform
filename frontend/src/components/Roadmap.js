@@ -2,117 +2,107 @@ import React, { useState } from "react";
 import ReactFlow, { MiniMap, Controls, Background } from "reactflow";
 import "reactflow/dist/style.css";
 
-const Roadmap = () => {
+export default function Roadmap() {
+  const BACKEND_URL = "https://educonnect-platform-backend.onrender.com/api/ask";
+
   const [career, setCareer] = useState("");
   const [roadmapData, setRoadmapData] = useState({ nodes: [], edges: [] });
   const [loading, setLoading] = useState(false);
-  const apiKey = "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"; // Replace with your actual API key
-  const url = "https://api.groq.com/openai/v1/chat/completions";
+  const [error, setError] = useState(null);
 
+  // -----------------------------
+  // FETCH ROADMAP (via backend)
+  // -----------------------------
   const fetchRoadmap = async () => {
     if (!career.trim()) {
-      alert("Please enter a career field.");
+      setError("Please enter a career field.");
       return;
     }
-    setLoading(true);
 
-    const requestBody = {
-      model: "llama3-8b-8192",
-      messages: [
-        {
-          role: "system",
-          content: "Respond with valid JSON only. Do not include any additional text before or after. Ensure the JSON is complete and properly formatted.",
-        },
-        {
-          role: "user",
-          content: `Create a career roadmap for ${career} in this JSON format:
-          {
-            "nodes": [
-              {"id": "1", "position": {"x": 250, "y": 5}, "data": {"label": "Start"}},
-              {"id": "2", "position": {"x": 250, "y": 100}, "data": {"label": "Step 1"}},
-              {"id": "3", "position": {"x": 250, "y": 200}, "data": {"label": "Step 2"}}
-            ],
-            "edges": [
-              {"id": "e1-2", "source": "1", "target": "2"},
-              {"id": "e2-3", "source": "2", "target": "3"}
-            ]
-          }`,
-        },
-      ],
-      max_tokens: 1000,
-    };
+    setLoading(true);
+    setError(null);
+    setRoadmapData({ nodes: [], edges: [] });
 
     try {
-      const response = await fetch(url, {
+      const res = await fetch(BACKEND_URL, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(requestBody),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "general",
+          messages: [
+            {
+              role: "system",
+              content: `Return ONLY valid JSON with no explanation. Use this strict format:
+
+              {
+                "nodes": [
+                  {"id": "1", "position": {"x": 250, "y": 5}, "data": {"label": "Start"}}
+                ],
+                "edges": [
+                  {"id": "e1-2", "source": "1", "target": "2"}
+                ]
+              }`
+            },
+            {
+              role: "user",
+              content: `Create a step-by-step career roadmap for: ${career}`
+            }
+          ]
+        })
       });
 
-      const data = await response.json();
-      console.log("Raw API Response:", data);
+      const data = await res.json();
+      const rawText = data?.choices?.[0]?.message?.content?.trim() || "";
 
-      if (!data.choices || !data.choices[0]?.message?.content) {
-        throw new Error("Invalid response from AI");
+      // Extract JSON safely
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("Invalid JSON received.");
+
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
+        throw new Error("AI returned malformed roadmap.");
       }
 
-      let roadmapText = data.choices[0].message.content.trim();
-      console.log("Extracted JSON:", roadmapText);
-
-      // Ensure valid JSON response
-      const jsonMatch = roadmapText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("No valid JSON found");
-
-      const parsedRoadmap = JSON.parse(jsonMatch[0]);
-      console.log("Parsed Roadmap:", parsedRoadmap);
-
-      // Validate nodes and edges
-      if (!Array.isArray(parsedRoadmap.nodes) || !Array.isArray(parsedRoadmap.edges)) {
-        throw new Error("Invalid roadmap format");
-      }
-
-      // Convert labels to strings
-      const formattedNodes = parsedRoadmap.nodes.map((node) => ({
-        ...node,
-        data: { label: String(node.data.label) },
+      // Ensure labels are strings
+      const formattedNodes = parsed.nodes.map((n) => ({
+        ...n,
+        data: { label: String(n.data?.label || "") }
       }));
 
-      setRoadmapData({ nodes: formattedNodes, edges: parsedRoadmap.edges });
-    } catch (error) {
-      console.error("Error fetching roadmap:", error);
-      alert(`Failed to generate roadmap: ${error.message}`);
-    } finally {
-      setLoading(false);
+      setRoadmapData({ nodes: formattedNodes, edges: parsed.edges });
+    } catch (err) {
+      console.error(err);
+      setError("Failed to generate roadmap. Try again.");
     }
+
+    setLoading(false);
   };
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>
-        🚀 AI-Powered <span style={styles.highlight}>Career Roadmap</span>
-      </h1>
-      <p style={styles.description}>
-        Enter a career field to generate a <strong>step-by-step roadmap</strong> to success!
-      </p>
+    <div style={styles.wrapper}>
+      <h2 style={styles.heading}>AI Career Roadmap Builder 🚀</h2>
+      <p style={styles.subtext}>Enter your dream career and get a visual roadmap powered by AI.</p>
 
       <input
         type="text"
+        placeholder="e.g., Data Scientist, Software Engineer"
         value={career}
         onChange={(e) => setCareer(e.target.value)}
-        placeholder="Enter your dream career (e.g. Data Scientist)"
         style={styles.input}
       />
-      <button onClick={fetchRoadmap} style={styles.button} disabled={loading}>
-        {loading ? "🔄 Generating..." : "🚀 Generate Roadmap"}
+
+      <button onClick={fetchRoadmap} disabled={loading} style={styles.button}>
+        {loading ? "Generating..." : "Generate Roadmap"}
       </button>
 
+      {error && <p style={styles.error}>{error}</p>}
+
+      {/* REACT FLOW VISUALIZATION */}
       {roadmapData.nodes.length > 0 && (
-        <div style={styles.flowContainer}>
+        <div style={styles.flowBox}>
           <ReactFlow nodes={roadmapData.nodes} edges={roadmapData.edges} fitView>
-            <MiniMap style={{ backgroundColor: "#e0f7fa" }} />
+            <MiniMap />
             <Controls />
             <Background variant="dots" gap={12} size={1} />
           </ReactFlow>
@@ -120,60 +110,57 @@ const Roadmap = () => {
       )}
     </div>
   );
-};
+}
 
-// 🎨 Styles
+// -----------------------------
+// INTERNAL CSS (AiAssistance.js style)
+// -----------------------------
 const styles = {
-  container: {
+  wrapper: {
+    maxWidth: "900px",
+    margin: "20px auto",
+    padding: "20px",
+    background: "#f5f0ff",
+    borderRadius: "12px",
+  },
+  heading: {
+    color: "#6a0dad",
+    fontSize: "26px",
     textAlign: "center",
-    padding: "30px",
-    background: "linear-gradient(135deg, #2196F3, #00BCD4)",
-    minHeight: "100vh",
-    color: "white",
+    marginBottom: "10px",
   },
-  title: {
-    fontSize: "28px",
-    fontWeight: "bold",
-  },
-  highlight: {
-    color: "#FFD700",
-  },
-  description: {
-    fontSize: "16px",
+  subtext: {
+    textAlign: "center",
+    color: "#444",
     marginBottom: "20px",
   },
   input: {
+    width: "100%",
     padding: "12px",
-    fontSize: "16px",
-    width: "350px",
-    borderRadius: "10px",
-    border: "none",
-    marginBottom: "15px",
-    textAlign: "center",
-    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+    borderRadius: "8px",
+    border: "1px solid #ccc",
+    marginBottom: "10px",
   },
   button: {
-    padding: "12px 20px",
-    fontSize: "16px",
-    fontWeight: "bold",
-    color: "#fff",
-    backgroundColor: "#FF4081",
+    width: "100%",
+    padding: "12px",
+    background: "#6a0dad",
+    color: "white",
     border: "none",
-    borderRadius: "10px",
+    borderRadius: "8px",
     cursor: "pointer",
-    marginLeft: "10px",
-    transition: "0.3s",
+    marginBottom: "10px",
   },
-  flowContainer: {
+  error: {
+    color: "red",
+    textAlign: "center",
+    marginTop: "10px",
+  },
+  flowBox: {
     height: "500px",
-    width: "90%",
-    margin: "20px auto",
-    border: "2px solid #FFEB3B",
-    borderRadius: "10px",
-    backgroundColor: "#fff",
-    padding: "10px",
-    boxShadow: "0 4px 8px rgba(0, 0, 0, 0.2)",
+    marginTop: "20px",
+    borderRadius: "12px",
+    border: "1px solid #ddd",
+    background: "#fff",
   },
 };
-
-export default Roadmap;
